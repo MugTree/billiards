@@ -1,0 +1,12 @@
+bin/
+tmp/
+.env
+.env.**
+.DS_Store
+__debug_*
+node_modules
+billiards.db
+billiards.db-*
+app/db/seed/seed.csv
+/tailwindcss
+scripts
