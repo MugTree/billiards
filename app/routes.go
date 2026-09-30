@@ -33,8 +33,8 @@ func startHandler(_ *db.Queries) http.HandlerFunc {
 			return
 		}
 
-		TemplateLayout(
-			PageProps{Title: "Home"},
+		appLayout(
+			pageProps{Title: "Home"},
 			board,
 		).Render(w)
 
@@ -48,7 +48,10 @@ func shootHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	boardAfterShot, ok := _buildBoardOrError(w, r, playShot(gs))
+	// simple shot is deliberately simple at the mo
+	simpleOutcome := shoot()
+
+	boardAfterShot, ok := _buildBoardOrError(w, r, playShot(gs, simpleOutcome))
 	if !ok {
 		return
 	}
@@ -114,8 +117,8 @@ func scoreHandler(w http.ResponseWriter, r *http.Request) {
 	sse.PatchElementGostar(continueBoard)
 }
 
-func _gameStateFromSignalsOrError(w http.ResponseWriter, r *http.Request) (GameState, bool) {
-	gs := GameState{}
+func _gameStateFromSignalsOrError(w http.ResponseWriter, r *http.Request) (gameState, bool) {
+	gs := gameState{}
 	if err := datastar.ReadSignals(r, &gs); err != nil {
 		httpLogAndError(w, r, err.Error())
 		return gs, false
@@ -124,7 +127,7 @@ func _gameStateFromSignalsOrError(w http.ResponseWriter, r *http.Request) (GameS
 	return gs, true
 }
 
-func _buildBoardOrError(w http.ResponseWriter, r *http.Request, gs GameState) (gomponents.Node, bool) {
+func _buildBoardOrError(w http.ResponseWriter, r *http.Request, gs gameState) (gomponents.Node, bool) {
 	board, err := buildGameBoard(gs)
 	if err != nil {
 		httpLogAndError(w, r, err.Error())

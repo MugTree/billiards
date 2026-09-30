@@ -10,12 +10,12 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-type PageProps struct {
+type pageProps struct {
 	Title       string
 	Description string
 }
 
-func TemplateLayout(props PageProps, children ...Node) Node {
+func appLayout(props pageProps, children ...Node) Node {
 
 	return HTML5(HTML5Props{
 		Title:       props.Title,
@@ -31,18 +31,18 @@ func TemplateLayout(props PageProps, children ...Node) Node {
 
 }
 
-func buildGameBoard(gs GameState) (Node, error) {
+func buildGameBoard(gs gameState) (Node, error) {
 
 	sigs, err := gs.AsSignals()
 	if err != nil {
 		return nil, err
 	}
 
-	return TemplateGameBoard(gs, sigs), nil
+	return gameBoard(gs, sigs), nil
 
 }
 
-func TemplateGameBoard(s GameState, sigs map[string]any) Node {
+func gameBoard(s gameState, sigs map[string]any) Node {
 
 	pockets := pocketsMapAsSlice(s.GetTableState())
 
@@ -56,7 +56,7 @@ func TemplateGameBoard(s GameState, sigs map[string]any) Node {
 					Text("Start game"),
 				)),
 		),
-		DrawBaize(pockets),
+		drawBaize(pockets),
 		If(s.Phase == gamePhaseScore, Div(
 			Input(
 				Name("scorer_sum"),
@@ -70,13 +70,13 @@ func TemplateGameBoard(s GameState, sigs map[string]any) Node {
 	)
 }
 
-func DrawBaize(pockets []Pocket) Node {
+func drawBaize(pockets []pocket) Node {
 	return Div(
 		ID("baize"),
 		Class("baize"),
-		Map(pockets, func(p Pocket) Node {
-			return Div(Classes{fmt.Sprintf("p%v", p.Position): true, "sunk": p.IsHit},
-				Text(strconv.Itoa(p.Value)),
+		Map(pockets, func(p pocket) Node {
+			return Div(Classes{fmt.Sprintf("p%v", p.position): true, "sunk": p.isHit},
+				Text(strconv.Itoa(p.value)),
 			)
 		}),
 	)

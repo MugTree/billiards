@@ -8,10 +8,10 @@ import (
 	"github.com/MugTree/billiards/lib"
 )
 
-type Pocket struct {
-	Position int
-	Value    int
-	IsHit    bool
+type pocket struct {
+	position int
+	value    int
+	isHit    bool
 }
 
 const (
@@ -23,7 +23,7 @@ const (
 	gamePhaseScore string = "score"
 )
 
-type GameState struct {
+type gameState struct {
 	CurrentPlayer     string `json:"current_player"`
 	RedTotal          int64  `json:"red_total"`
 	BlueTotal         int64  `json:"blue_total"`
@@ -34,19 +34,42 @@ type GameState struct {
 	ShotSum           int    `json:"shot_sum"`
 }
 
-func startGame() GameState {
+func startGame() gameState {
 
 	players := []string{redPlayer, bluePlayer}
 	startingPlayer := players[rand.IntN(2)]
 
-	return GameState{
+	return gameState{
 		PocketsNumbersHit: []int{},
 		CurrentPlayer:     startingPlayer,
 		Phase:             gamePhaseShoot,
 	}
 }
 
-func swapPlayer(gs GameState) GameState {
+func (gs gameState) GetTableState() map[int]pocket {
+
+	pm := getPocketMap()
+
+	if len(gs.PocketsNumbersHit) == 0 {
+		return pm
+	}
+
+	pocketsHit := gs.PocketsNumbersHit
+
+	for _, v := range pocketsHit {
+		val := pm[v]
+		val.isHit = true
+		pm[v] = val
+	}
+
+	return pm
+}
+
+func (gs gameState) AsSignals() (map[string]any, error) {
+	return lib.StructToMap(gs)
+}
+
+func swapPlayer(gs gameState) gameState {
 	newPlayer := lib.If(gs.CurrentPlayer == bluePlayer, redPlayer, bluePlayer)
 	gs.CurrentPlayer = newPlayer
 	gs.Phase = gamePhaseShoot
@@ -57,14 +80,12 @@ func swapPlayer(gs GameState) GameState {
 	return gs
 }
 
-func playShot(gs GameState) GameState {
+func playShot(gs gameState, shotResult []int) gameState {
 
 	gs.Phase = gamePhaseScore
+	gs.PocketsNumbersHit = shotResult
 
-	shot := shoot()
-	gs.PocketsNumbersHit = shot
-
-	if len(shot) == 0 {
+	if len(shotResult) == 0 {
 		gs.ShotSum = 0
 		return gs
 	}
@@ -76,7 +97,7 @@ func playShot(gs GameState) GameState {
 		m, ok := pockets[pn]
 		// check against tampering
 		if ok {
-			score += m.Value
+			score += m.value
 		}
 	}
 
@@ -84,7 +105,7 @@ func playShot(gs GameState) GameState {
 	return gs
 }
 
-func updatePlayerScore(gs GameState) (GameState, error) {
+func updatePlayerScore(gs gameState) (gameState, error) {
 
 	switch gs.CurrentPlayer {
 	case bluePlayer:
@@ -103,63 +124,39 @@ func updatePlayerScore(gs GameState) (GameState, error) {
 	return gs, nil
 }
 
-func (gs GameState) GetTableState() map[int]Pocket {
-
-	pm := getPocketMap()
-
-	if len(gs.PocketsNumbersHit) == 0 {
-		return pm
-	}
-
-	pocketsHit := gs.PocketsNumbersHit
-
-	for _, v := range pocketsHit {
-		val := pm[v]
-		val.IsHit = true
-		pm[v] = val
-	}
-
-	return pm
-}
-
-func (gs GameState) AsSignals() (map[string]any, error) {
-	return lib.StructToMap(gs)
-}
-
-func pocketsMapAsSlice(pm map[int]Pocket) []Pocket {
-	pockets := []Pocket{}
+func pocketsMapAsSlice(pm map[int]pocket) []pocket {
+	pockets := []pocket{}
 	for k, p := range pm {
-		p.Position = k
+		p.position = k
 		pockets = append(pockets, p)
 	}
 
-	sort.Slice(pockets, func(i, j int) bool { return pockets[i].Position < pockets[j].Position })
+	sort.Slice(pockets, func(i, j int) bool { return pockets[i].position < pockets[j].position })
 	return pockets
 }
 
 // generate an slice of ints up to 9 long consisting of
 // numbers 1..9
-func shoot() []int {
-	nums := []int{}
+func shoot() (pocketsHit []int) {
 	for i := 1; i < 10; i++ {
 		r := rand.IntN(4)
 		if r == 1 {
-			nums = append(nums, i)
+			pocketsHit = append(pocketsHit, i)
 		}
 	}
-	return nums
+	return pocketsHit
 }
 
-func getPocketMap() map[int]Pocket {
-	pockets := map[int]Pocket{}
-	pockets[1] = Pocket{Value: 10}
-	pockets[2] = Pocket{Value: 10}
-	pockets[3] = Pocket{Value: 20}
-	pockets[4] = Pocket{Value: 10}
-	pockets[5] = Pocket{Value: 10}
-	pockets[6] = Pocket{Value: 100}
-	pockets[7] = Pocket{Value: 50}
-	pockets[8] = Pocket{Value: 50}
-	pockets[9] = Pocket{Value: 200}
+func getPocketMap() map[int]pocket {
+	pockets := map[int]pocket{}
+	pockets[1] = pocket{value: 10}
+	pockets[2] = pocket{value: 10}
+	pockets[3] = pocket{value: 20}
+	pockets[4] = pocket{value: 10}
+	pockets[5] = pocket{value: 10}
+	pockets[6] = pocket{value: 100}
+	pockets[7] = pocket{value: 50}
+	pockets[8] = pocket{value: 50}
+	pockets[9] = pocket{value: 200}
 	return pockets
 }
