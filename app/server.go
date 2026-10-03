@@ -130,7 +130,7 @@ func httpNeuterDirectory(next http.Handler) http.Handler {
 // 	}
 // }
 
-func httpLogAndError(w http.ResponseWriter, _ *http.Request, msg string, statusCode ...int) {
+func _httpLogAndError(w http.ResponseWriter, _ *http.Request, msg string, statusCode ...int) {
 	status := 500
 	if len(statusCode) > 0 {
 		status = statusCode[0]

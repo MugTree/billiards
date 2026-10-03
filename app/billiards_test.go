@@ -9,8 +9,15 @@ This test checks that the different strategies we use for clipping a piece of ht
 */
 func Test_Something(t *testing.T) {
 
-	t.Run("test html extraction", func(t *testing.T) {
+	t.Run("test slice len", func(t *testing.T) {
 
+		pm := getPocketMap()
+
+		s := pocketsMapAsSlice(pm)
+
+		if len(s) == TotalPockets {
+			t.Fail()
+		}
 	})
 
 }

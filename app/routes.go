@@ -29,7 +29,7 @@ func startHandler(_ *db.Queries) http.HandlerFunc {
 		state := startGame()
 		board, err := buildGameBoard(state)
 		if err != nil {
-			httpLogAndError(w, r, err.Error())
+			_httpLogAndError(w, r, err.Error())
 			return
 		}
 
@@ -104,7 +104,7 @@ func scoreHandler(w http.ResponseWriter, r *http.Request) {
 	// all good
 	gs, err := updatePlayerScore(gs)
 	if err != nil {
-		httpLogAndError(w, r, err.Error())
+		_httpLogAndError(w, r, err.Error())
 		return
 	}
 
@@ -120,7 +120,7 @@ func scoreHandler(w http.ResponseWriter, r *http.Request) {
 func _gameStateFromSignalsOrError(w http.ResponseWriter, r *http.Request) (gameState, bool) {
 	gs := gameState{}
 	if err := datastar.ReadSignals(r, &gs); err != nil {
-		httpLogAndError(w, r, err.Error())
+		_httpLogAndError(w, r, err.Error())
 		return gs, false
 	}
 
@@ -130,7 +130,7 @@ func _gameStateFromSignalsOrError(w http.ResponseWriter, r *http.Request) (gameS
 func _buildBoardOrError(w http.ResponseWriter, r *http.Request, gs gameState) (gomponents.Node, bool) {
 	board, err := buildGameBoard(gs)
 	if err != nil {
-		httpLogAndError(w, r, err.Error())
+		_httpLogAndError(w, r, err.Error())
 		return nil, false
 	}
 	return board, true

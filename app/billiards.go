@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"sort"
+	"time"
 
 	"github.com/MugTree/billiards/lib"
 )
@@ -80,27 +81,32 @@ func swapPlayer(gs gameState) gameState {
 	return gs
 }
 
-func playShot(gs gameState, shotResult []int) gameState {
+func playShot(gs gameState, shotDetails []shot) gameState {
 
 	gs.Phase = gamePhaseScore
-	gs.PocketsNumbersHit = shotResult
 
-	if len(shotResult) == 0 {
+	if len(shotDetails) == 0 {
 		gs.ShotSum = 0
 		return gs
 	}
 
-	pockets := getPocketMap()
+	pocketMap := getPocketMap()
 	score := 0
 
-	for _, pn := range gs.PocketsNumbersHit {
-		m, ok := pockets[pn]
-		// check against tampering
-		if ok {
+	pocketsHit := make([]int, len(shotDetails))
+	for i, v := range shotDetails {
+		pocketsHit[i] = v.pocket
+	}
+
+	// score the shot
+	for _, pocketNumber := range pocketsHit {
+		m, hasPocket := pocketMap[pocketNumber]
+		if hasPocket {
 			score += m.value
 		}
 	}
 
+	gs.PocketsNumbersHit = pocketsHit
 	gs.ShotSum = score
 	return gs
 }
@@ -125,23 +131,51 @@ func updatePlayerScore(gs gameState) (gameState, error) {
 }
 
 func pocketsMapAsSlice(pm map[int]pocket) []pocket {
-	pockets := []pocket{}
+	pockets := make([]pocket, 0, len(pm))
+
 	for k, p := range pm {
 		p.position = k
 		pockets = append(pockets, p)
 	}
 
-	sort.Slice(pockets, func(i, j int) bool { return pockets[i].position < pockets[j].position })
+	sort.Slice(pockets, func(i, j int) bool {
+		return pockets[i].position < pockets[j].position
+	})
+
 	return pockets
 }
 
 // generate an slice of ints up to 9 long consisting of
 // numbers 1..9
-func shoot() (pocketsHit []int) {
-	for i := 1; i < 10; i++ {
+
+type shot struct {
+	pocket int
+	timing time.Duration
+}
+
+const TotalPockets int = 9
+
+func shoot() []shot {
+
+	pocketsHit := make([]shot, TotalPockets)
+	for i := 1; i <= TotalPockets; i++ {
+
 		r := rand.IntN(4)
+
+		// 25% chance of pot going in
+		// --------------------------------------------------
 		if r == 1 {
-			pocketsHit = append(pocketsHit, i)
+
+			// a few secongs
+			// ----------------------------------------
+			randSecs := rand.IntN(3)
+			d := time.Second * time.Duration(randSecs)
+
+			s := shot{
+				pocket: i,
+				timing: d, // we'll a
+			}
+			pocketsHit[i] = s
 		}
 	}
 	return pocketsHit
@@ -149,6 +183,7 @@ func shoot() (pocketsHit []int) {
 
 func getPocketMap() map[int]pocket {
 	pockets := map[int]pocket{}
+
 	pockets[1] = pocket{value: 10}
 	pockets[2] = pocket{value: 10}
 	pockets[3] = pocket{value: 20}

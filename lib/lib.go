@@ -26,6 +26,18 @@ func Filter[T any](slice []T, fn func(T) bool) []T {
 	return out
 }
 
+// group items in a slice by a field
+func GroupBy[T any, K comparable](items []T, keyFunc func(T) K) map[K][]T {
+	result := make(map[K][]T)
+
+	for _, item := range items {
+		key := keyFunc(item)
+		result[key] = append(result[key], item)
+	}
+
+	return result
+}
+
 // Find returns the first element that satisfies fn.
 // The second return value reports whether a match was found.
 func Find[T any](slice []T, fn func(T) bool) (T, bool) {

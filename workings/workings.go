@@ -1,26 +1,13 @@
 package main
 
-import (
-	"math/rand/v2"
-
-	"github.com/goforj/godump"
-)
-
-func shoot() []int {
-	nums := []int{}
-	for i := 1; i < 10; i++ {
-		r := rand.IntN(4)
-		if r == 1 {
-			nums = append(nums, i)
-		}
-	}
-	return nums
-}
+import "fmt"
 
 func main() {
 
-	s := shoot()
+	tp := 9
 
-	godump.Dump(len(s), s)
+	for i := 1; i <= tp; i++ {
+		fmt.Println(i)
+	}
 
 }
