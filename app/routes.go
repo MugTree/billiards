@@ -6,12 +6,34 @@ import (
 	"net/http"
 
 	"github.com/MugTree/billiards/app/db"
+	"github.com/MugTree/billiards/lib"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/goforj/godump"
 	"github.com/starfederation/datastar-go/datastar"
-	"maragu.dev/gomponents"
 )
+
+func isValidInput(w http.ResponseWriter, r *http.Request) (gameState, bool) {
+
+	var game = gameState{}
+
+	if err := datastar.ReadSignals(r, &game); err != nil {
+		_httpLogAndError(w, r, err.Error())
+		return game, false
+	}
+
+	// Add more validation when required
+	// -----------------------------------------------
+
+	// is the player value correct?
+	//
+	if game.CurrentPlayer != redPlayer && game.CurrentPlayer != bluePlayer {
+		_httpLogAndError(w, r, fmt.Errorf("Validation error: player needs to be red or blue").Error())
+		return game, false
+	}
+
+	return game, true
+
+}
 
 func getRouter(_ *db.Queries) chi.Router {
 	r := chi.NewRouter()
@@ -26,14 +48,7 @@ func getRouter(_ *db.Queries) chi.Router {
 
 		players := []string{redPlayer, bluePlayer}
 		startingPlayer := players[rand.IntN(2)]
-
-		state := newGameState(startingPlayer)
-
-		board, err := buildGameBoard(state)
-		if err != nil {
-			_httpLogAndError(w, r, err.Error())
-			return
-		}
+		board := gameBoard(newGameState(startingPlayer))
 
 		appLayout(
 			pageProps{Title: "Home"},
@@ -42,107 +57,86 @@ func getRouter(_ *db.Queries) chi.Router {
 
 	})
 
-	/**
-	Play a shot
-	------------------------------------------------
-	*/
+	//
+	// Play a shot
+	//------------------------------------------------
 	r.Get("/shoot", func(w http.ResponseWriter, r *http.Request) {
 
-		state, ok := _gameStateFromSignalsOrError(w, r)
+		game, ok := isValidInput(w, r)
 		if !ok {
 			return
 		}
 
-		boardAfterShot, ok := _buildBoardOrError(w, r, playShot(state))
-		if !ok {
-			return
+		pocketsHit := playShot()
+
+		score := 0
+		for _, p := range pocketsHit {
+			m, _ := game.Pockets[p.Pocket]
+			score += m.Value
+		}
+		game.Score = score
+
+		game.Phase = gamePhaseScore
+		game.PocketsHit = lib.Map(pocketsHit, func(s potted) int { return s.Pocket })
+
+		for _, p := range game.PocketsHit {
+			pocket := game.Pockets[p]
+			pocket.IsHit = true
+			game.Pockets[p] = pocket
 		}
 
 		sse := datastar.NewSSE(w, r)
-		sse.PatchElementGostar(boardAfterShot)
+		sse.PatchElementGostar(gameBoard(game))
+
 	})
 
-	/**
-	Score the shot
-	-----------------------------------------------------
-	*/
+	// Score the shot
+	// -----------------------------------------------------
 	r.Post("/score", func(w http.ResponseWriter, r *http.Request) {
 
-		state, ok := _gameStateFromSignalsOrError(w, r)
+		game, ok := isValidInput(w, r)
 		if !ok {
 			return
 		}
 
-		fmt.Println("phase:", state.Phase)
 		sse := datastar.NewSSE(w, r)
 
-		// scoring error
-		if state.UserCalculation != state.Score {
-			godump.Dump("scoring error", state)
+		// scorer error
+		// ------------------------------------------------------
+		if game.UserCalculation != game.Score {
 
-			state.ScorerError = true
-
-			errorBoard, ok := _buildBoardOrError(w, r, state)
-			if !ok {
-				return
-			}
-
-			sse.PatchElementGostar(errorBoard)
+			game.ScorerError = true
+			sse.PatchElementGostar(gameBoard(game))
 			return
 		}
 
-		// swap player no score
-		if state.UserCalculation == 0 {
-			godump.Dump("no score", state)
+		// no score change player
+		// ---------------------------------------------
+		if game.Score == 0 {
 
-			noScoreBoard, ok := _buildBoardOrError(w, r, swapPlayer(state))
-			if !ok {
-				return
-			}
-
-			sse.PatchElementGostar(noScoreBoard)
+			game.CurrentPlayer = lib.If(game.CurrentPlayer == bluePlayer, redPlayer, bluePlayer)
+			game.Phase = gamePhaseShoot
+			game.UserCalculation = 0
+			game.Score = 0
+			game.PocketsHit = []int{}
+			sse.PatchElementGostar(gameBoard(game))
 			return
 		}
 
-		godump.Dump("ALL GOOD", state)
-
-		// all good
-		state, err := updateScore(state)
-		if err != nil {
-			_httpLogAndError(w, r, err.Error())
-			return
+		// build a break
+		// --------------------------------------------
+		if game.CurrentPlayer == bluePlayer {
+			game.BlueTotal = game.BlueTotal + int64(game.Score)
+		} else {
+			game.RedTotal = game.RedTotal + int64(game.Score)
 		}
 
-		continueBoard, ok := _buildBoardOrError(w, r, state)
-		if !ok {
-			return
-		}
-
-		godump.Dump("NEW BOARD", state)
-		sse.PatchElementGostar(continueBoard)
+		game.Phase = gamePhaseShoot
+		game.UserCalculation = 0
+		game.PocketsHit = []int{}
+		game.Score = 0
+		sse.PatchElementGostar(gameBoard(game))
 	})
 
 	return r
-}
-
-// Helpers
-// -----------------------------------------------------------------
-
-func _gameStateFromSignalsOrError(w http.ResponseWriter, r *http.Request) (gameState, bool) {
-	gs := gameState{}
-	if err := datastar.ReadSignals(r, &gs); err != nil {
-		_httpLogAndError(w, r, err.Error())
-		return gs, false
-	}
-
-	return gs, true
-}
-
-func _buildBoardOrError(w http.ResponseWriter, r *http.Request, gs gameState) (gomponents.Node, bool) {
-	board, err := buildGameBoard(gs)
-	if err != nil {
-		_httpLogAndError(w, r, err.Error())
-		return nil, false
-	}
-	return board, true
 }

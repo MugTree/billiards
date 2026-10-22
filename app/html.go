@@ -31,23 +31,15 @@ func appLayout(props pageProps, children ...Node) Node {
 
 }
 
-func buildGameBoard(gs gameState) (Node, error) {
+func gameBoard(state gameState) Node {
 
-	sigs, err := gs.AsSignals()
-	if err != nil {
-		return nil, err
-	}
-
-	return gameBoard(gs, sigs), nil
-
-}
-
-func gameBoard(s gameState, sigs map[string]any) Node {
+	// has been validated at this point
+	sigs, _ := state.AsSignals()
 
 	return Div(ID("table"), ds.Signals(sigs),
 		Div(
 			ID("controls"),
-			If(s.Phase == gamePhaseShoot,
+			If(state.Phase == gamePhaseShoot,
 				A(
 					ds.On("click", "@get('/shoot')"),
 					Style("text-decoration: underline"),
@@ -55,9 +47,9 @@ func gameBoard(s gameState, sigs map[string]any) Node {
 				)),
 		),
 
-		drawBaize(s),
+		drawBaize(state),
 
-		If(s.Phase == gamePhaseScore, Div(
+		If(state.Phase == gamePhaseScore, Div(
 			Input(
 				Name("scorer_sum"),
 				ds.Bind("scorer_sum"),
@@ -72,16 +64,13 @@ func gameBoard(s gameState, sigs map[string]any) Node {
 
 func drawBaize(state gameState) Node {
 
-	pSlice := make([]pocket, len(state.Table))
-	for i, v := range state.Table {
-		pSlice[i] = v
-	}
+	sl := state.TableMapToSl()
 
 	return Div(ID("baize"), Class("baize"),
 
-		Map(pSlice, func(p pocket) Node {
-			return Div(Classes{fmt.Sprintf("p%v", p.position): true, "sunk": p.isHit},
-				Text(strconv.Itoa(p.value)),
+		Map(sl, func(p pocket) Node {
+			return Div(Classes{fmt.Sprintf("p%v", p.Position): true, "sunk": p.IsHit},
+				Text(strconv.Itoa(p.Value)),
 			)
 		}),
 	)

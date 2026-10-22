@@ -1,22 +1,22 @@
 package app
 
 import (
-	"fmt"
 	"math/rand/v2"
+	"sort"
 	"time"
 
 	"github.com/MugTree/billiards/lib"
 )
 
 type pocket struct {
-	position int
-	value    int
-	isHit    bool
+	Position int  `json:"position"`
+	Value    int  `json:"value"`
+	IsHit    bool `json:"is_hit"`
 }
 
-type shot struct {
-	pocket int
-	timing time.Duration
+type potted struct {
+	Pocket int           `json:"pocket"`
+	Timing time.Duration `json:"timing"`
 }
 
 const TotalPockets int = 9
@@ -35,11 +35,32 @@ type gameState struct {
 	RedTotal        int64          `json:"red_total"`
 	BlueTotal       int64          `json:"blue_total"`
 	Phase           string         `json:"phase"`
-	PocketsHit      []int          `json:"pocket_numbers_hit"`
-	UserCalculation int            `json:"scorer_sum"`
+	PocketsHit      []int          `json:"pocket_hit"`
+	UserCalculation int            `json:"user_calculation"`
 	ScorerError     bool           `json:"scorer_error"`
-	Score           int            `json:"shot_sum"`
-	Table           map[int]pocket `json:"pockets"`
+	Score           int            `json:"score"`
+	Pockets         map[int]pocket `json:"table"`
+}
+
+func (gs gameState) TableMapToSl() []pocket {
+
+	if gs.Pockets == nil {
+		LogInfo("table map is nil??")
+		return []pocket{}
+	}
+
+	sl := make([]pocket, len(gs.Pockets))
+	var i = 0
+	for _, v := range gs.Pockets {
+		sl[i] = v
+		i++
+	}
+
+	sort.Slice(sl, func(i, j int) bool {
+		return sl[i].Position < sl[j].Position
+	})
+
+	return sl
 }
 
 func newGameState(player string) gameState {
@@ -48,83 +69,18 @@ func newGameState(player string) gameState {
 		PocketsHit:    []int{},
 		CurrentPlayer: player,
 		Phase:         gamePhaseShoot,
-		Table:         initialisePockets(),
+		Pockets:       setupTable(),
 	}
-
 }
 
 func (gs gameState) AsSignals() (map[string]any, error) {
 	return lib.StructToMap(gs)
 }
 
-func swapPlayer(state gameState) gameState {
-	newPlayer := lib.If(state.CurrentPlayer == bluePlayer, redPlayer, bluePlayer)
+func playShot() []potted {
 
-	state.CurrentPlayer = newPlayer
-	state.Phase = gamePhaseShoot
-	state.UserCalculation = 0
-	state.Score = 0
-	state.PocketsHit = []int{}
-	return state
-}
+	pots := []potted{}
 
-func playShot(state gameState) gameState {
-
-	pocketsHit := shoot()
-
-	// shot has been played the new phase is score regardless of outcome
-	state.Phase = gamePhaseScore
-	if len(pocketsHit) == 0 {
-		state.Score = 0
-		return state
-	}
-
-	score := 0
-	for _, pocket := range pocketsHit {
-		m, hasPocket := state.Table[pocket.pocket]
-		if hasPocket {
-			score += m.value
-		}
-	}
-
-	state.PocketsHit = lib.Map(pocketsHit, func(s shot) int { return s.pocket })
-	state.Score = score
-
-	if len(state.PocketsHit) == 0 {
-		return state
-	}
-
-	for _, v := range state.PocketsHit {
-		val := state.Table[v]
-		val.isHit = true
-		state.Table[v] = val
-	}
-
-	return state
-}
-
-func updateScore(state gameState) (gameState, error) {
-
-	switch state.CurrentPlayer {
-	case bluePlayer:
-		state.BlueTotal = state.BlueTotal + int64(state.Score)
-	case redPlayer:
-		state.RedTotal = state.RedTotal + int64(state.Score)
-	default:
-		return state, fmt.Errorf("player input is wrong: %s", state.CurrentPlayer)
-	}
-
-	state.Phase = gamePhaseShoot
-	state.UserCalculation = 0
-	state.PocketsHit = []int{}
-	state.Score = 0
-
-	return state, nil
-}
-
-func shoot() []shot {
-
-	pocketsHit := make([]shot, TotalPockets)
 	for i := 1; i <= TotalPockets; i++ {
 
 		r := rand.IntN(4)
@@ -138,26 +94,26 @@ func shoot() []shot {
 			randSecs := rand.IntN(3)
 			d := time.Second * time.Duration(randSecs)
 
-			s := shot{
-				pocket: i,
-				timing: d, // we'll a
+			s := potted{
+				Pocket: i,
+				Timing: d, // we'll a
 			}
-			pocketsHit[i] = s
+			pots = append(pots, s)
 		}
 	}
-	return pocketsHit
+	return pots
 }
 
-func initialisePockets() map[int]pocket {
+func setupTable() map[int]pocket {
 	pockets := map[int]pocket{}
-	pockets[1] = pocket{position: 1, value: 10}
-	pockets[2] = pocket{position: 2, value: 10}
-	pockets[3] = pocket{position: 3, value: 20}
-	pockets[4] = pocket{position: 4, value: 10}
-	pockets[5] = pocket{position: 5, value: 10}
-	pockets[6] = pocket{position: 6, value: 100}
-	pockets[7] = pocket{position: 7, value: 50}
-	pockets[8] = pocket{position: 8, value: 50}
-	pockets[9] = pocket{position: 9, value: 200}
+	pockets[1] = pocket{Position: 1, Value: 10}
+	pockets[2] = pocket{Position: 2, Value: 10}
+	pockets[3] = pocket{Position: 3, Value: 20}
+	pockets[4] = pocket{Position: 4, Value: 10}
+	pockets[5] = pocket{Position: 5, Value: 10}
+	pockets[6] = pocket{Position: 6, Value: 100}
+	pockets[7] = pocket{Position: 7, Value: 50}
+	pockets[8] = pocket{Position: 8, Value: 50}
+	pockets[9] = pocket{Position: 9, Value: 200}
 	return pockets
 }
