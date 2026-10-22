@@ -11,11 +11,9 @@ func Test_Something(t *testing.T) {
 
 	t.Run("test slice len", func(t *testing.T) {
 
-		pm := getPocketMap()
+		pm := getPockets()
 
-		s := pocketsMapAsSlice(pm)
-
-		if len(s) == TotalPockets {
+		if len(pm) == TotalPockets {
 			t.Fail()
 		}
 	})

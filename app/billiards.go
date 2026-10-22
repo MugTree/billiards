@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"math/rand/v2"
-	"sort"
 	"time"
 
 	"github.com/MugTree/billiards/lib"
@@ -15,6 +14,13 @@ type pocket struct {
 	isHit    bool
 }
 
+type shot struct {
+	pocket int
+	timing time.Duration
+}
+
+const TotalPockets int = 9
+
 const (
 	redPlayer  string = "red"
 	bluePlayer string = "blue"
@@ -25,135 +31,96 @@ const (
 )
 
 type gameState struct {
-	CurrentPlayer     string `json:"current_player"`
-	RedTotal          int64  `json:"red_total"`
-	BlueTotal         int64  `json:"blue_total"`
-	Phase             string `json:"phase"`
-	PocketsNumbersHit []int  `json:"pocket_numbers_hit"`
-	ScorerSum         int    `json:"scorer_sum"`
-	ScorerError       bool   `json:"scorer_error"`
-	ShotSum           int    `json:"shot_sum"`
+	CurrentPlayer   string         `json:"current_player"`
+	RedTotal        int64          `json:"red_total"`
+	BlueTotal       int64          `json:"blue_total"`
+	Phase           string         `json:"phase"`
+	PocketsHit      []int          `json:"pocket_numbers_hit"`
+	UserCalculation int            `json:"scorer_sum"`
+	ScorerError     bool           `json:"scorer_error"`
+	Score           int            `json:"shot_sum"`
+	Table           map[int]pocket `json:"pockets"`
 }
 
-func startGame() gameState {
-
-	players := []string{redPlayer, bluePlayer}
-	startingPlayer := players[rand.IntN(2)]
+func newGameState(player string) gameState {
 
 	return gameState{
-		PocketsNumbersHit: []int{},
-		CurrentPlayer:     startingPlayer,
-		Phase:             gamePhaseShoot,
-	}
-}
-
-func (gs gameState) GetTableState() map[int]pocket {
-
-	pm := getPocketMap()
-
-	if len(gs.PocketsNumbersHit) == 0 {
-		return pm
+		PocketsHit:    []int{},
+		CurrentPlayer: player,
+		Phase:         gamePhaseShoot,
+		Table:         initialisePockets(),
 	}
 
-	pocketsHit := gs.PocketsNumbersHit
-
-	for _, v := range pocketsHit {
-		val := pm[v]
-		val.isHit = true
-		pm[v] = val
-	}
-
-	return pm
 }
 
 func (gs gameState) AsSignals() (map[string]any, error) {
 	return lib.StructToMap(gs)
 }
 
-func swapPlayer(gs gameState) gameState {
-	newPlayer := lib.If(gs.CurrentPlayer == bluePlayer, redPlayer, bluePlayer)
-	gs.CurrentPlayer = newPlayer
-	gs.Phase = gamePhaseShoot
-	gs.ScorerSum = 0
-	gs.ShotSum = 0
-	gs.PocketsNumbersHit = []int{}
+func swapPlayer(state gameState) gameState {
+	newPlayer := lib.If(state.CurrentPlayer == bluePlayer, redPlayer, bluePlayer)
 
-	return gs
+	state.CurrentPlayer = newPlayer
+	state.Phase = gamePhaseShoot
+	state.UserCalculation = 0
+	state.Score = 0
+	state.PocketsHit = []int{}
+	return state
 }
 
-func playShot(gs gameState, shotDetails []shot) gameState {
+func playShot(state gameState) gameState {
 
-	gs.Phase = gamePhaseScore
+	pocketsHit := shoot()
 
-	if len(shotDetails) == 0 {
-		gs.ShotSum = 0
-		return gs
+	// shot has been played the new phase is score regardless of outcome
+	state.Phase = gamePhaseScore
+	if len(pocketsHit) == 0 {
+		state.Score = 0
+		return state
 	}
 
-	pocketMap := getPocketMap()
 	score := 0
-
-	pocketsHit := make([]int, len(shotDetails))
-	for i, v := range shotDetails {
-		pocketsHit[i] = v.pocket
-	}
-
-	// score the shot
-	for _, pocketNumber := range pocketsHit {
-		m, hasPocket := pocketMap[pocketNumber]
+	for _, pocket := range pocketsHit {
+		m, hasPocket := state.Table[pocket.pocket]
 		if hasPocket {
 			score += m.value
 		}
 	}
 
-	gs.PocketsNumbersHit = pocketsHit
-	gs.ShotSum = score
-	return gs
+	state.PocketsHit = lib.Map(pocketsHit, func(s shot) int { return s.pocket })
+	state.Score = score
+
+	if len(state.PocketsHit) == 0 {
+		return state
+	}
+
+	for _, v := range state.PocketsHit {
+		val := state.Table[v]
+		val.isHit = true
+		state.Table[v] = val
+	}
+
+	return state
 }
 
-func updatePlayerScore(gs gameState) (gameState, error) {
+func updateScore(state gameState) (gameState, error) {
 
-	switch gs.CurrentPlayer {
+	switch state.CurrentPlayer {
 	case bluePlayer:
-		gs.BlueTotal = gs.BlueTotal + int64(gs.ShotSum)
+		state.BlueTotal = state.BlueTotal + int64(state.Score)
 	case redPlayer:
-		gs.RedTotal = gs.RedTotal + int64(gs.ShotSum)
+		state.RedTotal = state.RedTotal + int64(state.Score)
 	default:
-		return gs, fmt.Errorf("player input is wrong: %s", gs.CurrentPlayer)
+		return state, fmt.Errorf("player input is wrong: %s", state.CurrentPlayer)
 	}
 
-	gs.Phase = gamePhaseShoot
-	gs.ScorerSum = 0
-	gs.PocketsNumbersHit = []int{}
-	gs.ShotSum = 0
+	state.Phase = gamePhaseShoot
+	state.UserCalculation = 0
+	state.PocketsHit = []int{}
+	state.Score = 0
 
-	return gs, nil
+	return state, nil
 }
-
-func pocketsMapAsSlice(pm map[int]pocket) []pocket {
-	pockets := make([]pocket, 0, len(pm))
-
-	for k, p := range pm {
-		p.position = k
-		pockets = append(pockets, p)
-	}
-
-	sort.Slice(pockets, func(i, j int) bool {
-		return pockets[i].position < pockets[j].position
-	})
-
-	return pockets
-}
-
-// generate an slice of ints up to 9 long consisting of
-// numbers 1..9
-
-type shot struct {
-	pocket int
-	timing time.Duration
-}
-
-const TotalPockets int = 9
 
 func shoot() []shot {
 
@@ -181,17 +148,16 @@ func shoot() []shot {
 	return pocketsHit
 }
 
-func getPocketMap() map[int]pocket {
+func initialisePockets() map[int]pocket {
 	pockets := map[int]pocket{}
-
-	pockets[1] = pocket{value: 10}
-	pockets[2] = pocket{value: 10}
-	pockets[3] = pocket{value: 20}
-	pockets[4] = pocket{value: 10}
-	pockets[5] = pocket{value: 10}
-	pockets[6] = pocket{value: 100}
-	pockets[7] = pocket{value: 50}
-	pockets[8] = pocket{value: 50}
-	pockets[9] = pocket{value: 200}
+	pockets[1] = pocket{position: 1, value: 10}
+	pockets[2] = pocket{position: 2, value: 10}
+	pockets[3] = pocket{position: 3, value: 20}
+	pockets[4] = pocket{position: 4, value: 10}
+	pockets[5] = pocket{position: 5, value: 10}
+	pockets[6] = pocket{position: 6, value: 100}
+	pockets[7] = pocket{position: 7, value: 50}
+	pockets[8] = pocket{position: 8, value: 50}
+	pockets[9] = pocket{position: 9, value: 200}
 	return pockets
 }

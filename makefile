@@ -2,7 +2,7 @@ production-build-app:
 	CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++ GOARCH=amd64 GOOS=linux CGO_ENABLED=1 go build -ldflags "-linkmode external -extldflags -static" -o ./bin/app.amd64 .
 
 build-app:
-	go build -o ./bin/app.mac .
+	go build -o ./bin/app.mac ./cmd
 
 drop-data:
 	rm billiards.db
@@ -18,7 +18,7 @@ lint:
 	golangci-lint run .
 
 run-tests:
-	cd www && go test -v && cd ..
+	cd app && go test -v && cd ..
 
 dev: 
 	air

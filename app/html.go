@@ -44,8 +44,6 @@ func buildGameBoard(gs gameState) (Node, error) {
 
 func gameBoard(s gameState, sigs map[string]any) Node {
 
-	pockets := pocketsMapAsSlice(s.GetTableState())
-
 	return Div(ID("table"), ds.Signals(sigs),
 		Div(
 			ID("controls"),
@@ -53,10 +51,12 @@ func gameBoard(s gameState, sigs map[string]any) Node {
 				A(
 					ds.On("click", "@get('/shoot')"),
 					Style("text-decoration: underline"),
-					Text("Start game"),
+					Text("Play shot!"),
 				)),
 		),
-		drawBaize(pockets),
+
+		drawBaize(s),
+
 		If(s.Phase == gamePhaseScore, Div(
 			Input(
 				Name("scorer_sum"),
@@ -70,11 +70,16 @@ func gameBoard(s gameState, sigs map[string]any) Node {
 	)
 }
 
-func drawBaize(pockets []pocket) Node {
-	return Div(
-		ID("baize"),
-		Class("baize"),
-		Map(pockets, func(p pocket) Node {
+func drawBaize(state gameState) Node {
+
+	pSlice := make([]pocket, len(state.Table))
+	for i, v := range state.Table {
+		pSlice[i] = v
+	}
+
+	return Div(ID("baize"), Class("baize"),
+
+		Map(pSlice, func(p pocket) Node {
 			return Div(Classes{fmt.Sprintf("p%v", p.position): true, "sunk": p.isHit},
 				Text(strconv.Itoa(p.value)),
 			)

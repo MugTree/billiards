@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 
 	"github.com/MugTree/billiards/app/db"
@@ -12,21 +13,22 @@ import (
 	"maragu.dev/gomponents"
 )
 
-func getRouter(queries *db.Queries) chi.Router {
+func getRouter(_ *db.Queries) chi.Router {
 	r := chi.NewRouter()
 	//r.Use(httpDebugRequest)
 	r.Handle("/public/*", httpNeuterDirectory(http.FileServer(http.FS(staticFS))))
-	r.Get("/", startHandler(queries))
-	r.Get("/shoot", shootHandler)
-	r.Post("/score", scoreHandler)
-	return r
-}
 
-func startHandler(_ *db.Queries) http.HandlerFunc {
+	/**
+	Start the game
+	----------------------------------------------
+	*/
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 
-	return func(w http.ResponseWriter, r *http.Request) {
+		players := []string{redPlayer, bluePlayer}
+		startingPlayer := players[rand.IntN(2)]
 
-		state := startGame()
+		state := newGameState(startingPlayer)
+
 		board, err := buildGameBoard(state)
 		if err != nil {
 			_httpLogAndError(w, r, err.Error())
@@ -38,84 +40,93 @@ func startHandler(_ *db.Queries) http.HandlerFunc {
 			board,
 		).Render(w)
 
-	}
-}
+	})
 
-func shootHandler(w http.ResponseWriter, r *http.Request) {
+	/**
+	Play a shot
+	------------------------------------------------
+	*/
+	r.Get("/shoot", func(w http.ResponseWriter, r *http.Request) {
 
-	gs, ok := _gameStateFromSignalsOrError(w, r)
-	if !ok {
-		return
-	}
-
-	// simple shot is deliberately simple at the mo
-	simpleOutcome := shoot()
-
-	boardAfterShot, ok := _buildBoardOrError(w, r, playShot(gs, simpleOutcome))
-	if !ok {
-		return
-	}
-
-	sse := datastar.NewSSE(w, r)
-	sse.PatchElementGostar(boardAfterShot)
-
-}
-
-func scoreHandler(w http.ResponseWriter, r *http.Request) {
-
-	gs, ok := _gameStateFromSignalsOrError(w, r)
-	if !ok {
-		return
-	}
-
-	fmt.Println("phase:", gs.Phase)
-	sse := datastar.NewSSE(w, r)
-
-	// scoring error
-	if gs.ScorerSum != gs.ShotSum {
-		godump.Dump("scoring error", gs)
-
-		gs.ScorerError = true
-
-		errorBoard, ok := _buildBoardOrError(w, r, gs)
+		state, ok := _gameStateFromSignalsOrError(w, r)
 		if !ok {
 			return
 		}
 
-		sse.PatchElementGostar(errorBoard)
-		return
-	}
-
-	// swap player no score
-	if gs.ScorerSum == 0 {
-		godump.Dump("no score", gs)
-
-		noScoreBoard, ok := _buildBoardOrError(w, r, swapPlayer(gs))
+		boardAfterShot, ok := _buildBoardOrError(w, r, playShot(state))
 		if !ok {
 			return
 		}
 
-		sse.PatchElementGostar(noScoreBoard)
-		return
-	}
+		sse := datastar.NewSSE(w, r)
+		sse.PatchElementGostar(boardAfterShot)
+	})
 
-	godump.Dump("ALL GOOD", gs)
+	/**
+	Score the shot
+	-----------------------------------------------------
+	*/
+	r.Post("/score", func(w http.ResponseWriter, r *http.Request) {
 
-	// all good
-	gs, err := updatePlayerScore(gs)
-	if err != nil {
-		_httpLogAndError(w, r, err.Error())
-		return
-	}
+		state, ok := _gameStateFromSignalsOrError(w, r)
+		if !ok {
+			return
+		}
 
-	continueBoard, ok := _buildBoardOrError(w, r, gs)
-	if !ok {
-		return
-	}
+		fmt.Println("phase:", state.Phase)
+		sse := datastar.NewSSE(w, r)
 
-	godump.Dump("NEW BOARD", gs)
-	sse.PatchElementGostar(continueBoard)
+		// scoring error
+		if state.UserCalculation != state.Score {
+			godump.Dump("scoring error", state)
+
+			state.ScorerError = true
+
+			errorBoard, ok := _buildBoardOrError(w, r, state)
+			if !ok {
+				return
+			}
+
+			sse.PatchElementGostar(errorBoard)
+			return
+		}
+
+		// swap player no score
+		if state.UserCalculation == 0 {
+			godump.Dump("no score", state)
+
+			noScoreBoard, ok := _buildBoardOrError(w, r, swapPlayer(state))
+			if !ok {
+				return
+			}
+
+			sse.PatchElementGostar(noScoreBoard)
+			return
+		}
+
+		godump.Dump("ALL GOOD", state)
+
+		// all good
+		state, err := updateScore(state)
+		if err != nil {
+			_httpLogAndError(w, r, err.Error())
+			return
+		}
+
+		continueBoard, ok := _buildBoardOrError(w, r, state)
+		if !ok {
+			return
+		}
+
+		godump.Dump("NEW BOARD", state)
+		sse.PatchElementGostar(continueBoard)
+	})
+
+	return r
 }
+
+// Helpers
+// -----------------------------------------------------------------
 
 func _gameStateFromSignalsOrError(w http.ResponseWriter, r *http.Request) (gameState, bool) {
 	gs := gameState{}
