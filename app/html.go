@@ -69,9 +69,15 @@ func drawBaize(state gameState) Node {
 	return Div(ID("baize"), Class("baize"),
 
 		Map(sl, func(p pocket) Node {
-			return Div(Classes{fmt.Sprintf("p%v", p.Position): true, "sunk": p.IsHit},
-				Text(strconv.Itoa(p.Value)),
-			)
+			return drawPocket(p)
 		}),
+	)
+}
+
+func drawPocket(p pocket) Node {
+	return Div(
+		ID(fmt.Sprintf("pocket-%v", p.Position)),
+		Classes{fmt.Sprintf("p%v", p.Position): true, "sunk": p.IsHit},
+		Text(strconv.Itoa(p.Value)),
 	)
 }

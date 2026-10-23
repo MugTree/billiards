@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"time"
 
 	"github.com/MugTree/billiards/app/db"
 	"github.com/MugTree/billiards/lib"
+	"github.com/goforj/godump"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/starfederation/datastar-go/datastar"
@@ -48,11 +50,11 @@ func getRouter(_ *db.Queries) chi.Router {
 
 		players := []string{redPlayer, bluePlayer}
 		startingPlayer := players[rand.IntN(2)]
-		board := gameBoard(newGameState(startingPlayer))
+		startBoard := gameBoard(newGameState(startingPlayer))
 
 		appLayout(
 			pageProps{Title: "Home"},
-			board,
+			startBoard,
 		).Render(w)
 
 	})
@@ -62,32 +64,79 @@ func getRouter(_ *db.Queries) chi.Router {
 	//------------------------------------------------
 	r.Get("/shoot", func(w http.ResponseWriter, r *http.Request) {
 
-		game, ok := isValidInput(w, r)
+		initialState, ok := isValidInput(w, r)
 		if !ok {
 			return
 		}
 
-		pocketsHit := playShot()
+		// simple game atm assumes that no balls hang about
+		// -------------------------------------------------
 
-		score := 0
-		for _, p := range pocketsHit {
-			m, _ := game.Pockets[p.Pocket]
-			score += m.Value
-		}
-		game.Score = score
-
-		game.Phase = gamePhaseScore
-		game.PocketsHit = lib.Map(pocketsHit, func(s potted) int { return s.Pocket })
-
-		for _, p := range game.PocketsHit {
-			pocket := game.Pockets[p]
-			pocket.IsHit = true
-			game.Pockets[p] = pocket
-		}
+		initialState.Pockets = setupTable()
 
 		sse := datastar.NewSSE(w, r)
-		sse.PatchElementGostar(gameBoard(game))
 
+		if initialState.IsBreak {
+
+			// redraw board
+			sse.PatchElementGostar(gameBoard(initialState))
+		}
+
+		afterShot := func(game gameState) gameState {
+
+			for i := 1; i <= len(game.Pockets); i++ {
+
+				r := rand.IntN(4)
+
+				// 25% chance of pot going in??? :/
+				// --------------------------------------------------
+				if r == 1 {
+
+					pocket := game.Pockets[i]
+					pocket.TimeToDrop = rand.IntN(2) + 1
+					pocket.IsHit = true
+
+					game.Pockets[i] = pocket
+					game.Score += pocket.Value
+					game.IsBreak = true
+
+				}
+			}
+
+			game.Phase = gamePhaseScore
+			return game
+
+		}(initialState)
+
+		//sse := datastar.NewSSE(w, r)
+
+		fmt.Printf("There are %v balls potted...", afterShot.GetPottedCount())
+		fmt.Println()
+
+		for _, v := range afterShot.Pockets {
+
+			if v.IsHit {
+
+				dropTime := v.TimeToDrop * int(time.Second)
+				time.Sleep(time.Duration(dropTime))
+				sse.PatchElementGostar(drawPocket(v))
+				fmt.Println("animating...")
+				fmt.Println()
+
+			}
+		}
+
+		sse.PatchElementGostar(gameBoard(afterShot))
+
+		b, err := afterShot.ToJSON()
+		if err != nil {
+			_httpLogAndError(w, r, err.Error())
+			return
+		}
+
+		sse.PatchSignals(b)
+
+		debugObj(afterShot.Phase)
 	})
 
 	// Score the shot
@@ -118,7 +167,7 @@ func getRouter(_ *db.Queries) chi.Router {
 			game.Phase = gamePhaseShoot
 			game.UserCalculation = 0
 			game.Score = 0
-			game.PocketsHit = []int{}
+			game.Pockets = setupTable()
 			sse.PatchElementGostar(gameBoard(game))
 			return
 		}
@@ -133,10 +182,17 @@ func getRouter(_ *db.Queries) chi.Router {
 
 		game.Phase = gamePhaseShoot
 		game.UserCalculation = 0
-		game.PocketsHit = []int{}
+		game.Pockets = setupTable()
 		game.Score = 0
 		sse.PatchElementGostar(gameBoard(game))
 	})
 
 	return r
+}
+
+func debugObj(obj any) {
+
+	godump.DumpJSON(obj)
+	//fmt.Printf("%+v\n", obj)
+
 }

@@ -1,22 +1,17 @@
 package app
 
 import (
-	"math/rand/v2"
+	"encoding/json"
 	"sort"
-	"time"
 
 	"github.com/MugTree/billiards/lib"
 )
 
 type pocket struct {
-	Position int  `json:"position"`
-	Value    int  `json:"value"`
-	IsHit    bool `json:"is_hit"`
-}
-
-type potted struct {
-	Pocket int           `json:"pocket"`
-	Timing time.Duration `json:"timing"`
+	Position   int  `json:"position"`
+	Value      int  `json:"value"`
+	IsHit      bool `json:"is_hit"`
+	TimeToDrop int  `json:"time_to_drop"`
 }
 
 const TotalPockets int = 9
@@ -35,11 +30,23 @@ type gameState struct {
 	RedTotal        int64          `json:"red_total"`
 	BlueTotal       int64          `json:"blue_total"`
 	Phase           string         `json:"phase"`
-	PocketsHit      []int          `json:"pocket_hit"`
 	UserCalculation int            `json:"user_calculation"`
 	ScorerError     bool           `json:"scorer_error"`
 	Score           int            `json:"score"`
 	Pockets         map[int]pocket `json:"table"`
+	IsBreak         bool           `json:"is_break"`
+}
+
+func (gs gameState) GetPottedCount() int {
+
+	hits := 0
+	for _, v := range gs.Pockets {
+		if v.IsHit {
+			hits++
+		}
+	}
+
+	return hits
 }
 
 func (gs gameState) TableMapToSl() []pocket {
@@ -63,10 +70,13 @@ func (gs gameState) TableMapToSl() []pocket {
 	return sl
 }
 
+func (gs gameState) ToJSON() ([]byte, error) {
+	return json.Marshal(gs)
+}
+
 func newGameState(player string) gameState {
 
 	return gameState{
-		PocketsHit:    []int{},
 		CurrentPlayer: player,
 		Phase:         gamePhaseShoot,
 		Pockets:       setupTable(),
@@ -75,33 +85,6 @@ func newGameState(player string) gameState {
 
 func (gs gameState) AsSignals() (map[string]any, error) {
 	return lib.StructToMap(gs)
-}
-
-func playShot() []potted {
-
-	pots := []potted{}
-
-	for i := 1; i <= TotalPockets; i++ {
-
-		r := rand.IntN(4)
-
-		// 25% chance of pot going in
-		// --------------------------------------------------
-		if r == 1 {
-
-			// a few secongs
-			// ----------------------------------------
-			randSecs := rand.IntN(3)
-			d := time.Second * time.Duration(randSecs)
-
-			s := potted{
-				Pocket: i,
-				Timing: d, // we'll a
-			}
-			pots = append(pots, s)
-		}
-	}
-	return pots
 }
 
 func setupTable() map[int]pocket {

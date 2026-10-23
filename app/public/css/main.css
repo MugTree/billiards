@@ -35,3 +35,7 @@
 .p9 {
   grid-area: p9;
 }
+
+.sunk {
+  color: red;
+}
